@@ -1,0 +1,50 @@
+services:
+  mysql:
+    image: mysql:8.0
+    container_name: kotatsu-mysql
+    environment:
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:-kotatsu_root_password}
+      MYSQL_DATABASE: ${MYSQL_DATABASE:-kotatsu_sync}
+      MYSQL_USER: ${MYSQL_USER:-kotatsu_user}
+      MYSQL_PASSWORD: ${MYSQL_PASSWORD:-kotatsu_password}
+    ports:
+      - "${MYSQL_PORT:-3306}:3306"
+    volumes:
+      - mysql_data:/var/lib/mysql
+      - ./database.sql:/docker-entrypoint-initdb.d/database.sql
+    networks:
+      - kotatsu-network
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost"]
+      timeout: 20s
+      retries: 10
+
+  kotatsu-sync:
+    build:
+      context: ./kotatsu-syncserver-master
+      dockerfile: Dockerfile
+    container_name: kotatsu-sync-server
+    environment:
+      DATABASE_HOST: ${DATABASE_HOST:-mysql}
+      DATABASE_USER: ${DATABASE_USER:-kotatsu_user}
+      DATABASE_PASSWORD: ${DATABASE_PASSWORD:-kotatsu_password}
+      DATABASE_NAME: ${DATABASE_NAME:-kotatsu_sync}
+      DATABASE_PORT: ${DATABASE_PORT:-3306}
+      JWT_SECRET: ${JWT_SECRET:-your_jwt_secret_change_this_in_production}
+      ALLOW_NEW_REGISTER: ${ALLOW_NEW_REGISTER:-true}
+    ports:
+      - "${SYNC_SERVER_PORT:-8081}:8080"
+    depends_on:
+      mysql:
+        condition: service_healthy
+    networks:
+      - kotatsu-network
+    restart: unless-stopped
+
+volumes:
+  mysql_data:
+
+networks:
+  kotatsu-network:
+    driver: bridge
